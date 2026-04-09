@@ -13,12 +13,14 @@ Orchestrates the full pipeline:
 
 from __future__ import annotations
 
+import gc
 import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
+import torch
 
 from ..benchmarks.calibration import compute_pass_rates, select_matched_pool
 from ..benchmarks.mcq import (
@@ -54,6 +56,7 @@ class ExperimentConfig:
 
     # Generation.
     max_new_tokens: int = 2048
+    post_trained_max_new_tokens: int = 8192
     temperature: float = 0.0
 
     # Capability matching.
@@ -92,8 +95,16 @@ def run_calibration(
     use_think_tags: bool = False,
     max_new_tokens: int = 2048,
     capture_activations: bool = True,
+    capture_layers: list[int] | None = None,
 ) -> list[Trace]:
     """Run a model on a set of MCQ instances and return traces."""
+    # Stop strings: fewshot models generate endlessly without these.
+    # Think-tag models (DeepSeek R1) naturally stop after the answer.
+    if use_think_tags:
+        stop_strings = None
+    else:
+        stop_strings = ["\nQuestion:", "\n\nQuestion:"]
+
     traces = []
     for i, inst in enumerate(instances):
         prompt = format_mcq_prompt(
@@ -108,6 +119,9 @@ def run_calibration(
             correct_answer=inst.correct_answer,
             max_new_tokens=max_new_tokens,
             capture_activations=capture_activations,
+            capture_layers=capture_layers,
+            stop_strings=stop_strings,
+            use_think_tags=use_think_tags,
         )
 
         if (i + 1) % 10 == 0 or i == 0:
@@ -283,7 +297,12 @@ def run_experiment(config: ExperimentConfig) -> dict:
     )
 
     # --- 2. Run both models ---
+    # Determine which layers to capture. We only need the candidate
+    # probe layers, not all layers in the model.
     model_traces: dict[str, list[Trace]] = {}
+    capture_layers: list[int] | None = None
+    layer_index_map: dict[int, int] | None = None
+
     for model_key, model_name, use_think in [
         ("base", config.base_model, False),
         (
@@ -294,12 +313,36 @@ def run_experiment(config: ExperimentConfig) -> dict:
     ]:
         logger.info("=== Running %s: %s ===", model_key, model_name)
         model = LocalModel(model_name)
+
+        # On first model, compute which layers to capture and the
+        # mapping from original layer index to stored index.
+        if capture_layers is None:
+            if config.probe_layers:
+                capture_layers = config.probe_layers
+            else:
+                n = model.num_layers
+                capture_layers = [n // 2, int(n * 0.75), n - 1]
+            layer_index_map = {
+                orig: stored for stored, orig in enumerate(capture_layers)
+            }
+            logger.info(
+                "Capturing activations at layers %s (indices %s in stored tensor)",
+                capture_layers,
+                list(range(len(capture_layers))),
+            )
+
+        max_tokens = (
+            config.post_trained_max_new_tokens
+            if model_key == "post_trained"
+            else config.max_new_tokens
+        )
         traces = run_calibration(
             model,
             all_instances,
             use_think_tags=use_think,
-            max_new_tokens=config.max_new_tokens,
+            max_new_tokens=max_tokens,
             capture_activations=True,
+            capture_layers=capture_layers,
         )
         model_traces[model_key] = traces
 
@@ -310,6 +353,9 @@ def run_experiment(config: ExperimentConfig) -> dict:
 
         # Free the model to make room for the next one.
         del model
+        gc.collect()
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
 
     # --- 3. Capability matching ---
     logger.info("Computing capability matching...")
@@ -377,8 +423,19 @@ def run_experiment(config: ExperimentConfig) -> dict:
 
     for model_key in ("base", "post_trained"):
         traces = matched_traces[model_key]
-        traces_with_acts = [t for t in traces if t.activations is not None]
+        traces_with_acts = [
+            t for t in traces
+            if t.activations is not None
+            and t.final_answer
+            and t.final_answer.upper() in "ABCD"
+        ]
 
+        logger.info(
+            "[%s] %d/%d traces have activations and valid answers",
+            model_key,
+            len(traces_with_acts),
+            len(traces),
+        )
         if not traces_with_acts:
             logger.warning(
                 "[%s] No traces with activations in matched pool. "
@@ -392,12 +449,9 @@ def run_experiment(config: ExperimentConfig) -> dict:
             }
             continue
 
-        # Determine which layers to try.
-        if config.probe_layers:
-            layers = config.probe_layers
-        else:
-            n_layers = traces_with_acts[0].activations.shape[0]
-            layers = [n_layers // 2, int(n_layers * 0.75), n_layers - 1]
+        # Use the layers we already captured. layer_index_map maps
+        # original layer indices to stored tensor indices.
+        layers = capture_layers
 
         activations = [t.activations for t in traces_with_acts]
         labels = [t.final_answer for t in traces_with_acts]
@@ -410,14 +464,15 @@ def run_experiment(config: ExperimentConfig) -> dict:
         best_layer = -1
         best_acc = -1.0
 
-        for layer in layers:
-            logger.info("[%s] Training probe at layer %d...", model_key, layer)
+        for orig_layer in layers:
+            stored_idx = layer_index_map[orig_layer]
+            logger.info("[%s] Training probe at layer %d (stored idx %d)...", model_key, orig_layer, stored_idx)
             probe = train_probe(
                 activations=activations,
                 labels=labels,
                 prompt_lengths=prompt_lens,
                 hidden_dim=hidden_dim,
-                layer=layer,
+                layer=stored_idx,
                 epochs=config.probe_epochs,
                 lr=config.probe_lr,
             )
@@ -425,16 +480,16 @@ def run_experiment(config: ExperimentConfig) -> dict:
             correct = sum(
                 1
                 for act, lbl in zip(activations, labels)
-                if probe.predict(act[layer])[0]
+                if probe.predict(act[stored_idx])[0]
                 == ANSWER_TO_IDX.get(lbl.upper(), -1)
             )
             acc = correct / len(activations)
-            logger.info("[%s] Layer %d accuracy: %.3f", model_key, layer, acc)
+            logger.info("[%s] Layer %d accuracy: %.3f", model_key, orig_layer, acc)
 
             if acc > best_acc:
                 best_acc = acc
                 best_probe = probe
-                best_layer = layer
+                best_layer = stored_idx
 
         probe_results[model_key] = {
             "probe": best_probe,

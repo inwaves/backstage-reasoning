@@ -65,15 +65,41 @@ class Trace:
 
         Returns:
             (cot_text, final_answer) where cot_text is the content between
-            <think> and </think>, and final_answer is everything after.
+            <think> and </think>, and final_answer is the answer letter
+            extracted from the text after </think>.
         """
+        import re
+
         think_start = raw_output.find("<think>")
         think_end = raw_output.find("</think>")
 
         if think_start != -1 and think_end != -1:
             cot = raw_output[think_start + len("<think>") : think_end].strip()
-            answer = raw_output[think_end + len("</think>") :].strip()
-            return cot, answer
+            after_think = raw_output[think_end + len("</think>") :].strip()
+
+            # Extract answer letter from text after </think>.
+            for pattern in [
+                r"(?:The answer is|Answer:)\s*\(?([A-Da-d])\)?",
+                r"\*\*([A-Da-d])\*\*",
+                r"\b([A-D])\b",
+            ]:
+                match = re.search(pattern, after_think, re.IGNORECASE)
+                if match:
+                    return cot, match.group(1).upper()
+
+            return cot, after_think.strip()
+
+        if think_start != -1:
+            # Truncated: <think> present but no </think> — CoT was cut off.
+            cot = raw_output[think_start + len("<think>") :].strip()
+            # Try to find an answer letter in the reasoning itself.
+            for pattern in [
+                r"(?:the answer is|answer:)\s*\(?([A-Da-d])\)?",
+            ]:
+                match = re.search(pattern, cot, re.IGNORECASE)
+                if match:
+                    return cot, match.group(1).upper()
+            return cot, ""
 
         # No think tags — treat entire output as potential CoT + answer.
         return "", raw_output.strip()

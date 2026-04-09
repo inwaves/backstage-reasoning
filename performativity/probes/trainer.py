@@ -163,13 +163,21 @@ def train_probe(
     if device is None:
         device = torch.device("cpu")
 
-    # Convert labels to indices.
+    # Convert labels to indices, skipping invalid labels.
+    valid_indices = []
     label_indices = []
-    for lbl in labels:
-        idx = ANSWER_TO_IDX.get(lbl.upper())
-        if idx is None:
-            raise ValueError(f"Unknown label: {lbl!r}. Expected A/B/C/D.")
-        label_indices.append(idx)
+    for i, lbl in enumerate(labels):
+        if not lbl or lbl.upper() not in ANSWER_TO_IDX:
+            continue
+        valid_indices.append(i)
+        label_indices.append(ANSWER_TO_IDX[lbl.upper()])
+
+    if not label_indices:
+        raise ValueError("No valid labels (A/B/C/D) found in training data.")
+
+    # Filter activations and prompt_lengths to match valid labels.
+    activations = [activations[i] for i in valid_indices]
+    prompt_lengths = [prompt_lengths[i] for i in valid_indices]
 
     # Select layer if needed.
     proc_acts = []

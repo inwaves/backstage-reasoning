@@ -97,6 +97,9 @@ class LocalModel:
         max_new_tokens: int = 2048,
         temperature: float = 0.0,
         capture_activations: bool = True,
+        capture_layers: Optional[list[int]] = None,
+        stop_strings: Optional[list[str]] = None,
+        use_think_tags: bool = False,
     ) -> Trace:
         """Generate a completion and optionally capture activations.
 
@@ -115,6 +118,9 @@ class LocalModel:
             max_new_tokens: Maximum tokens to generate.
             temperature: Sampling temperature (0 = greedy).
             capture_activations: Whether to run the activation-capture pass.
+            capture_layers: If set, only capture these layer indices
+                (0 = embedding, 1..N = transformer blocks). Reduces memory
+                and compute vs capturing all layers.
 
         Returns:
             A Trace with all fields populated.
@@ -133,6 +139,9 @@ class LocalModel:
         )
         if temperature > 0:
             gen_kwargs["temperature"] = temperature
+        if stop_strings:
+            gen_kwargs["stop_strings"] = stop_strings
+            gen_kwargs["tokenizer"] = self.tokenizer
 
         with torch.no_grad():
             output_ids = self.model.generate(**inputs, **gen_kwargs)
@@ -145,16 +154,29 @@ class LocalModel:
         gen_time = time.time() - t0
         num_tokens = len(generated_ids)
 
-        # Parse CoT and answer.
-        if "<think>" in raw_output:
-            cot_text, final_answer = Trace.parse_think_tags(raw_output)
+        # Parse CoT and answer. For think-tag models, the prompt ends
+        # with <think> so raw_output starts inside the think block.
+        if use_think_tags or "<think>" in raw_output:
+            cot_text, final_answer = Trace.parse_think_tags(
+                "<think>" + raw_output if use_think_tags and "<think>" not in raw_output else raw_output
+            )
         else:
             cot_text, final_answer = Trace.parse_fewshot_output(raw_output)
+
+        # Normalize: keep only the first A-D letter.
+        for char in (final_answer or ""):
+            if char.upper() in "ABCD":
+                final_answer = char.upper()
+                break
+        else:
+            final_answer = ""
 
         # Capture activations via a forward pass over the full sequence.
         activations = None
         if capture_activations:
-            activations = self._capture_activations(output_ids)
+            activations = self._capture_activations(
+                output_ids, layers=capture_layers
+            )
 
         metadata = {
             "generation_time_s": round(gen_time, 2),
@@ -177,18 +199,21 @@ class LocalModel:
         )
 
     def _capture_activations(
-        self, full_ids: torch.Tensor
+        self,
+        full_ids: torch.Tensor,
+        layers: Optional[list[int]] = None,
     ) -> torch.Tensor:
-        """Run a forward pass and extract all hidden states.
+        """Run a forward pass and extract hidden states.
 
         Args:
             full_ids: Token IDs for the complete sequence (prompt + response),
                 shape (1, total_seq_len).
+            layers: If set, only return these layer indices. Otherwise
+                return all layers.
 
         Returns:
-            Tensor of shape (num_layers+1, seq_len, hidden_dim) containing
-            residual stream activations at each layer. Layer 0 is the
-            embedding output; layers 1..N are transformer block outputs.
+            Tensor of shape (L, seq_len, hidden_dim) where L is the number
+            of requested layers (or num_layers+1 if layers is None).
         """
         with torch.no_grad():
             outputs = self.model(
@@ -198,10 +223,14 @@ class LocalModel:
 
         # outputs.hidden_states is a tuple of (num_layers+1,) tensors,
         # each of shape (batch=1, seq_len, hidden_dim).
-        # Stack into (num_layers+1, seq_len, hidden_dim).
-        hidden_states = torch.stack(
-            [h.squeeze(0) for h in outputs.hidden_states]
-        )
+        if layers is not None:
+            hidden_states = torch.stack(
+                [outputs.hidden_states[i].squeeze(0) for i in layers]
+            )
+        else:
+            hidden_states = torch.stack(
+                [h.squeeze(0) for h in outputs.hidden_states]
+            )
 
         # Move to CPU to free device memory.
         return hidden_states.cpu().float()
