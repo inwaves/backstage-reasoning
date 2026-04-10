@@ -15,6 +15,7 @@ dependencies = [
     "matplotlib",
     "seaborn",
     "pyyaml",
+    "anthropic>=0.93.0",
 ]
 
 [project.optional-dependencies]

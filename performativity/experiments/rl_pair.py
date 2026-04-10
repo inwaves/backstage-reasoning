@@ -56,7 +56,7 @@ class ExperimentConfig:
 
     # Generation.
     max_new_tokens: int = 2048
-    post_trained_max_new_tokens: int = 8192
+    post_trained_max_new_tokens: int = 16384
     temperature: float = 0.0
 
     # Capability matching.
@@ -79,7 +79,7 @@ class ExperimentConfig:
     ci_level: float = 0.95
 
     # CoT monitor.
-    monitor_model: str = "heuristic"
+    monitor_model: str = "claude-haiku-4-5-20251001"
 
     # Output.
     output_dir: str = "results/rl_pair"

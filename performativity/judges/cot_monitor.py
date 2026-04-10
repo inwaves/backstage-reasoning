@@ -4,7 +4,8 @@ The monitor is an LLM judge (another model) that reads a partial reasoning
 trace and predicts which answer the reasoning model has committed to, or
 "N/A" if the trace doesn't yet reveal a commitment.
 
-Supports API-based judges and a simple heuristic fallback for testing.
+Supports Anthropic (Claude), OpenAI-compatible APIs, and a simple heuristic
+fallback for testing.
 """
 
 from __future__ import annotations
@@ -46,14 +47,15 @@ class CoTMonitor:
     Args:
         judge_model: Model to use as judge. Options:
             - "heuristic": Simple pattern-matching fallback (no API needed).
-            - "gemini-2.5-flash": Google Gemini via API.
-            - Any OpenAI-compatible model name.
+            - "claude-haiku-4-5-20251001": Anthropic Claude Haiku via API.
+            - Any model name starting with "claude-": uses Anthropic API.
+            - Any other model name: uses OpenAI-compatible API.
         api_key: API key (read from environment if not provided).
     """
 
     def __init__(
         self,
-        judge_model: str = "heuristic",
+        judge_model: str = "claude-haiku-4-5-20251001",
         api_key: Optional[str] = None,
     ):
         self.judge_model = judge_model
@@ -79,7 +81,10 @@ class CoTMonitor:
         if self.judge_model == "heuristic":
             return self._heuristic_predict(cot_prefix)
 
-        return self._api_predict(question, choices, cot_prefix)
+        if self.judge_model.startswith("claude-"):
+            return self._anthropic_predict(question, choices, cot_prefix)
+
+        return self._openai_predict(question, choices, cot_prefix)
 
     def predict_at_all_steps(
         self,
@@ -134,16 +139,68 @@ class CoTMonitor:
 
         return "N/A", 0.0
 
-    def _api_predict(
+    def _format_prompt(
+        self, question: str, choices: list[str], cot_prefix: str
+    ) -> str:
+        return MONITOR_PROMPT_TEMPLATE.format(
+            question=question,
+            choice_a=choices[0] if len(choices) > 0 else "",
+            choice_b=choices[1] if len(choices) > 1 else "",
+            choice_c=choices[2] if len(choices) > 2 else "",
+            choice_d=choices[3] if len(choices) > 3 else "",
+            cot_prefix=cot_prefix,
+        )
+
+    @staticmethod
+    def _parse_judge_response(text: str) -> tuple[str, float]:
+        text = text.strip().upper()
+        if text in ("A", "B", "C", "D"):
+            return text, 0.9
+        if "N/A" in text:
+            return "N/A", 0.0
+        for char in text:
+            if char in "ABCD":
+                return char, 0.7
+        return "N/A", 0.0
+
+    def _anthropic_predict(
         self,
         question: str,
         choices: list[str],
         cot_prefix: str,
     ) -> tuple[str, float]:
-        """Predict using an LLM API.
+        """Predict using the Anthropic API (Claude)."""
+        try:
+            import anthropic
+        except ImportError:
+            logger.warning(
+                "anthropic package not installed. Falling back to heuristic."
+            )
+            return self._heuristic_predict(cot_prefix)
 
-        Currently supports OpenAI-compatible APIs.
-        """
+        api_key = self.api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+        if not api_key:
+            logger.warning("No Anthropic API key. Falling back to heuristic.")
+            return self._heuristic_predict(cot_prefix)
+
+        prompt = self._format_prompt(question, choices, cot_prefix)
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model=self.judge_model,
+            max_tokens=5,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        text = response.content[0].text
+        return self._parse_judge_response(text)
+
+    def _openai_predict(
+        self,
+        question: str,
+        choices: list[str],
+        cot_prefix: str,
+    ) -> tuple[str, float]:
+        """Predict using an OpenAI-compatible API."""
         try:
             from openai import OpenAI
         except ImportError:
@@ -157,15 +214,7 @@ class CoTMonitor:
             logger.warning("No API key available. Falling back to heuristic.")
             return self._heuristic_predict(cot_prefix)
 
-        prompt = MONITOR_PROMPT_TEMPLATE.format(
-            question=question,
-            choice_a=choices[0] if len(choices) > 0 else "",
-            choice_b=choices[1] if len(choices) > 1 else "",
-            choice_c=choices[2] if len(choices) > 2 else "",
-            choice_d=choices[3] if len(choices) > 3 else "",
-            cot_prefix=cot_prefix,
-        )
-
+        prompt = self._format_prompt(question, choices, cot_prefix)
         client = OpenAI(api_key=api_key)
         response = client.chat.completions.create(
             model=self.judge_model,
@@ -174,16 +223,5 @@ class CoTMonitor:
             temperature=0,
         )
 
-        text = response.choices[0].message.content.strip().upper()
-
-        if text in ("A", "B", "C", "D"):
-            return text, 0.9
-        if "N/A" in text:
-            return "N/A", 0.0
-
-        # Try to extract a letter.
-        for char in text:
-            if char in "ABCD":
-                return char, 0.7
-
-        return "N/A", 0.0
+        text = response.choices[0].message.content.strip()
+        return self._parse_judge_response(text)

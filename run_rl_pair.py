@@ -23,7 +23,7 @@ if __name__ == "__main__":
             mmlu_n=40,
             gpqa_n=10,
             max_new_tokens=2048,
-            post_trained_max_new_tokens=4096,
+            post_trained_max_new_tokens=8192,
             n_bootstrap=1000,
             output_dir="results/rl_pair_test",
         )
