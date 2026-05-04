@@ -1,8 +1,12 @@
 # Design Doc: Performativity Experiment Infrastructure
 
-Code design for both research projects:
-- [RL-Pair Performativity](./rl-pair-performativity/README.md) — does RL post-training cause more performative CoT?
-- [Multi-Step Performativity](./multi-step-performativity/README.md) — does the faithfulness gradient replicate in action-grounded domains?
+_Historical note: this was the infrastructure sketch for the pre-pivot
+experiments. See [README](README.md) for context and [../roadmap.md](../roadmap.md)
+for the active plan._
+
+Code design for both historical research projects:
+- [RL-Pair Performativity](rl-pair-performativity.md) — does RL post-training cause more performative CoT?
+- [Multi-Step Performativity](multi-step-performativity.md) — does the faithfulness gradient replicate in action-grounded domains?
 
 ## Architecture Overview
 

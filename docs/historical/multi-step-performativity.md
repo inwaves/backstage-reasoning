@@ -1,5 +1,9 @@
 # Multi-Step Performativity: Factor Verbalization in Action-Grounded Domains
 
+_Historical note: this is an archived pre-pivot direction. It remains useful
+background, but the active project is now the CoT relevance audit roadmap in
+[../roadmap.md](../roadmap.md)._
+
 **Status**: Design phase — no experiments run yet.
 
 **Core question**: Does the (model, task)-dependent CoT faithfulness gradient, established on MCQ and binary tool-calling, replicate in multi-step optimisation tasks where the action space is richer and factor-level measurement is possible?
@@ -26,7 +30,7 @@ This means multi-step tasks enable measurements that MCQ tasks cannot:
 2. **Factor Verbalization Depth (FVD)**: graded 0–3 scale measuring how deeply the CoT engages with a factor. Extends the binary hint-verbalization measurement from Chen et al. (2025, "Reasoning Models Don't Always Say What They Think") and MonitorBench's factor-level monitorability scoring.
 3. **Plan-Execution Divergence (PED)**: the rate at which the technique the model *says* it will use in CoT differs from the technique it *actually* implements.
 
-This is Open Question #3 from the [CoT Faithfulness README](../cot-faithfulness/README.md): "What about multi-step reasoning? All current evidence is on single-decision tasks. Does the rationalization pattern hold for extended multi-step reasoning where intermediate steps have consequences?"
+This is Open Question #3 from the [CoT faithfulness background](../cot-faithfulness-background.md): "What about multi-step reasoning? All current evidence is on single-decision tasks. Does the rationalization pattern hold for extended multi-step reasoning where intermediate steps have consequences?"
 
 ## Research Question
 
@@ -140,9 +144,9 @@ Alignment Forum post, ~3,000–5,000 words:
 
 ## Relation to Other Work
 
-- Supersedes the benchmark/measurement aspect of [frontier-relative-monitorability](../frontier-relative-monitorability/README.md)
-- Answers Open Question #3 in [cot-faithfulness](../cot-faithfulness/README.md)
-- Shares infrastructure with [rl-pair-performativity](../rl-pair-performativity/README.md)
+- Relates to the earlier frontier-relative-monitorability framing in the sibling `kb` repo
+- Answers Open Question #3 in [CoT faithfulness background](../cot-faithfulness-background.md)
+- Shares infrastructure with [rl-pair-performativity](rl-pair-performativity.md)
 - FVD and SUR metrics descend from MonitorBench (Wang et al., 2026) and Chen et al. (2025)
 
 ---

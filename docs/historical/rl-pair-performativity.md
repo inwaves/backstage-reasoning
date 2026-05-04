@@ -1,5 +1,9 @@
 # RL Post-Training and Performative CoT
 
+_Historical note: this is an archived pre-pivot direction. It remains useful
+background, but the active project is now the CoT relevance audit roadmap in
+[../roadmap.md](../roadmap.md)._
+
 **Status**: Design phase — no experiments run yet.
 
 **Core question**: At matched capability, does RL post-training increase the performativity of chain-of-thought reasoning?
@@ -13,7 +17,7 @@ A substantial body of work establishes that CoT faithfulness depends on the (mod
 - **Mechanistic**: Reasoning Theater (Boppana et al., 2026) showed probes decode answers far earlier than CoT monitors on easy MMLU, with the gap shrinking on hard GPQA-Diamond. "Therefore I Am" (Rajeswar et al., 2026) showed pre-CoT activations predict tool-calling decisions at >95% AUROC. ThinkBrake (Oh et al., 2025) found continued reasoning past the resolution point *hurts* accuracy.
 - **Practical**: METR (2025) found only 3 unfaithful trajectories in 21,272 on sufficiently complex tasks where CoT was computationally necessary. Hubinger (2025): "in cases where it is necessary for the model to write something down in the CoT to solve the problem, CoT monitoring is useful, but in cases where it's not necessary, it's much less useful."
 
-See [CoT Faithfulness README](../cot-faithfulness/README.md) for the full evidence catalog.
+See [CoT faithfulness background](../cot-faithfulness-background.md) for the full evidence catalog.
 
 Within this picture, the **commons paper** (Korbak et al., 2025, arXiv:2507.11473) makes a specific causal prediction: training pressure — particularly RL post-training and efficiency optimisation — erodes CoT monitorability. The efficiency research programme (Thinkless, ThinkBrake, Aggarwal & Welleck "L1") confirms that labs are actively training models to produce less CoT on easy tasks.
 
@@ -23,7 +27,7 @@ But no existing work cleanly tests whether **RL post-training is the causal driv
 
 > At matched capability on a shared task pool, does the RL-post-trained version of a model produce more performative CoT than the base version?
 
-This is Open Question #2 from the [CoT Faithfulness README](../cot-faithfulness/README.md): "Does RL training change this?"
+This is Open Question #2 from the [CoT faithfulness background](../cot-faithfulness-background.md): "Does RL training change this?"
 
 ## Method
 
@@ -100,9 +104,9 @@ Plus replication code and probe weights.
 
 ## Relation to Other Work
 
-- Supersedes the RL-intensity aspect of [frontier-relative-monitorability](../frontier-relative-monitorability/README.md)
-- Answers Open Question #2 in [cot-faithfulness](../cot-faithfulness/README.md)
-- Complements [multi-step-performativity](../multi-step-performativity/README.md) (shared infrastructure)
+- Relates to the earlier frontier-relative-monitorability framing in the sibling `kb` repo
+- Answers Open Question #2 in [CoT faithfulness background](../cot-faithfulness-background.md)
+- Complements [multi-step-performativity](multi-step-performativity.md) (shared infrastructure)
 
 ---
 
