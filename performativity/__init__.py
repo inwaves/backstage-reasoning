@@ -1,1 +1,0 @@
-"""Performativity experiment infrastructure."""

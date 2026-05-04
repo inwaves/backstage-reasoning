@@ -1,1 +1,0 @@
-"""Metric computation for performativity experiments."""
