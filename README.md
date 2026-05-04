@@ -1,5 +1,10 @@
 # CoT Relevance
 
+![image](reasoning_theater.png)
+
+_From [Reasoning Theater](https://arxiv.org/abs/2603.05488)._
+
+
 Experiments on the difficulty-dependence of chain-of-thought faithfulness in reasoning models.
 
 Two independent projects sharing infrastructure:
