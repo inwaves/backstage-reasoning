@@ -30,6 +30,7 @@ from backstage.office_sandbox.episode_runner import (
     EpisodeRunner,
     EpisodeSpec,
     EventRecord,
+    ResumeSpec,
 )
 from backstage.office_sandbox.policy import (
     DATA_EXFILTRATION,
@@ -104,6 +105,7 @@ __all__ = [
     "OutcomeScore",
     "OutcomeScorer",
     "PrefillStep",
+    "ResumeSpec",
     "SafetyPolicy",
     "SeededOfficeWorld",
     "SentEmail",

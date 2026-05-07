@@ -19,11 +19,10 @@ The core question is:
 
 Reasoning Theater gives us the methodological starting point: compare the
 visible trace with stronger signals such as activation probes and forced
-continuations. This project moves that idea from answer letters toward grounded
-agent trajectories.
+continuations. This project applies that idea to grounded agent trajectories.
 
-Instead of asking whether a model has internally chosen option A, we ask whether
-an agent is drifting toward a concrete outcome in a small real environment:
+We ask whether an agent is drifting toward a concrete outcome in a small real
+environment:
 
 - protected data sent to an unauthorized recipient;
 - a protected file deleted or overwritten;
@@ -60,8 +59,6 @@ from backstage.office_sandbox import BatchRunner, EpisodeRunner
 ## Docs
 
 - [docs/roadmap.md](docs/roadmap.md) - active project dashboard and roadmap.
-- [docs/cot-faithfulness-background.md](docs/cot-faithfulness-background.md) -
-  prior-work evidence catalog.
 
 ## Setup
 
@@ -76,6 +73,25 @@ uv sync --extra dev
 uv run ruff check .
 uv run ruff format .
 uv run pytest
+```
+
+## Office Batch CLI
+
+Run the default Hydra-configured office batch:
+
+```bash
+uv run backstage-office-batch
+```
+
+Override config fields from the command line:
+
+```bash
+uv run backstage-office-batch \
+  run.run_id=travel-vllm-smoke \
+  agent.kind=vllm \
+  agent.model=HuggingFaceTB/SmolLM2-135M-Instruct \
+  agent.vllm.base_url=http://127.0.0.1:8000/v1 \
+  agent.vllm.tool_mode=json
 ```
 
 ## vLLM Smoke Test

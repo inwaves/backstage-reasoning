@@ -219,6 +219,72 @@ def test_vllm_backend_returns_explicit_unknown_json_tool_to_runtime() -> None:
     assert result.tool_call.args == {"path": "notes.txt"}
 
 
+def test_vllm_backend_parses_fenced_json_action_shape() -> None:
+    client = FakeClient(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "content": (
+                            "```json\n"
+                            '{"message":"Reading.",'
+                            '"action":"read_file",'
+                            '"arguments":{"path":"notes.txt"}}'
+                            "\n```"
+                        )
+                    }
+                }
+            ]
+        }
+    )
+    backend = VLLMBackend(
+        backend_config=VLLMBackendConfig(tool_mode="json"),
+        client=client,
+    )
+
+    result = backend.complete(
+        messages=(ChatMessage(role="user", content="Please inspect notes."),),
+        tools=(_read_file_tool(),),
+        config=AgentConfig(model="test-model"),
+    )
+
+    assert result.message == "Reading."
+    assert result.tool_call is not None
+    assert result.tool_call.name == "read_file"
+    assert result.tool_call.args == {"path": "notes.txt"}
+
+
+def test_vllm_backend_rejects_bad_config_and_responses() -> None:
+    with pytest.raises(ValueError, match="unsupported vLLM tool mode"):
+        VLLMBackend(
+            backend_config=VLLMBackendConfig(tool_mode="xml"),  # type: ignore[arg-type]
+            client=FakeClient({}),
+        )
+
+    backend = VLLMBackend(client=FakeClient({"choices": []}))
+
+    with pytest.raises(VLLMBackendError, match="choices"):
+        backend.complete(
+            messages=(ChatMessage(role="user", content="Hello"),),
+            tools=(_read_file_tool(),),
+            config=AgentConfig(model="test-model"),
+        )
+
+
+def test_vllm_backend_rejects_non_mapping_extra_body_metadata() -> None:
+    backend = VLLMBackend(client=FakeClient({"choices": [{"message": {"content": ""}}]}))
+
+    with pytest.raises(VLLMBackendError, match="extra_body"):
+        backend.complete(
+            messages=(ChatMessage(role="user", content="Hello"),),
+            tools=(),
+            config=AgentConfig(
+                model="test-model",
+                metadata={"extra_body": "not-a-mapping"},
+            ),
+        )
+
+
 def test_vllm_backend_bad_native_arguments_are_harness_failure() -> None:
     response = {
         "choices": [

@@ -1,0 +1,39 @@
+hydra:
+  job:
+    chdir: false
+
+run:
+  run_id: office-smoke
+  repeats: 1
+  max_workers: 1
+  output_dir: results/${run.run_id}
+  metadata: {}
+
+world:
+  name: office_productivity
+
+agent:
+  kind: scripted
+  handoff_view: state_only
+  model: scripted
+  temperature: 0.0
+  max_tokens: 1024
+  seed: null
+  metadata: {}
+  vllm:
+    base_url: http://127.0.0.1:8000/v1
+    api_key: EMPTY
+    timeout: 120.0
+    tool_mode: json
+    tool_choice: auto
+    extra_body: {}
+  scripted:
+    steps:
+      - message: Done.
+        done: true
+
+episodes:
+  - episode_id: travel-packet-smoke
+    task_id: travel-packet
+    max_steps: 1
+    preconditioning_steps: []

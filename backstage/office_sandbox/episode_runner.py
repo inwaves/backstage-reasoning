@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from backstage.office_sandbox.policy import OutcomeScorer
 from backstage.office_sandbox.runtime import OfficeRuntime
@@ -25,6 +25,17 @@ class EpisodeSpec:
     user_message: str
     preconditioning_steps: tuple[PrefillStep, ...] = field(default_factory=tuple)
     max_steps: int = 12
+
+
+@dataclass(frozen=True)
+class ResumeSpec:
+    """Inputs for continuing from a saved episode checkpoint."""
+
+    episode_id: str
+    checkpoint_id: str
+    max_steps: int = 12
+    score_from: Literal["checkpoint", "handoff"] = "checkpoint"
+    user_message: str = ""
 
 
 @dataclass(frozen=True)
@@ -123,6 +134,9 @@ class EpisodeResult:
     final_state: OfficeState
     outcome: OutcomeScore
     failure: EpisodeFailure | None = None
+    score_start_action_index: int = 0
+    resume_source_episode_id: str = ""
+    resume_source_checkpoint_id: str = ""
 
     def checkpoint(self, checkpoint_id: str) -> CheckpointRecord:
         """Look up a checkpoint by id."""
@@ -241,6 +255,11 @@ class EpisodeRunner:
                 final_state=state.clone(),
                 outcome=outcome,
                 failure=failure,
+                score_start_action_index=(
+                    handoff_action_index
+                    if handoff_checkpoint_id
+                    else len(state.action_log)
+                ),
             )
 
         for step in spec.preconditioning_steps:
@@ -415,3 +434,240 @@ class EpisodeRunner:
             handoff_action_index=handoff_action_index,
             handoff_checkpoint_id=handoff_checkpoint_id,
         )
+
+    def resume(
+        self,
+        source: EpisodeResult,
+        spec: ResumeSpec,
+        agent: EpisodeAgent,
+    ) -> EpisodeResult:
+        """Continue a fresh agent from a saved checkpoint in an existing result."""
+
+        if spec.max_steps < 0:
+            raise ValueError("max_steps must be non-negative")
+        if spec.score_from not in {"checkpoint", "handoff"}:
+            raise ValueError(f"unsupported score_from: {spec.score_from}")
+        if source.world_id != self.world.world_id:
+            raise ValueError(
+                f"source world {source.world_id} does not match runner world "
+                f"{self.world.world_id}"
+            )
+
+        source_checkpoint = source.checkpoint(spec.checkpoint_id)
+        state = source_checkpoint.state.clone()
+        runtime = OfficeRuntime(state)
+        events = list(_events_through(source.events, source_checkpoint.sequence))
+        checkpoints = list(
+            _checkpoints_through(source.checkpoints, source_checkpoint.sequence)
+        )
+        user_message = spec.user_message or _source_user_message(source)
+        score_start_action_index = (
+            len(source_checkpoint.state.action_log)
+            if spec.score_from == "checkpoint"
+            else source.score_start_action_index
+        )
+
+        def record(
+            event_type: str,
+            *,
+            actor: str,
+            message: str = "",
+            call: ToolCall | None = None,
+            result: ToolResult | None = None,
+            action_index: int | None = None,
+            checkpoint_id: str = "",
+        ) -> EventRecord:
+            event = EventRecord(
+                sequence=len(events),
+                event_type=event_type,
+                actor=actor,
+                message=message,
+                call=call,
+                result=result,
+                action_index=action_index,
+                checkpoint_id=checkpoint_id,
+            )
+            events.append(event)
+            return event
+
+        def checkpoint(label: str) -> str:
+            checkpoint_id = f"{spec.episode_id}:{label}:{len(checkpoints)}"
+            event = record(
+                "checkpoint_created",
+                actor="runner",
+                message=label,
+                checkpoint_id=checkpoint_id,
+            )
+            checkpoints.append(
+                CheckpointRecord(
+                    checkpoint_id=checkpoint_id,
+                    sequence=event.sequence,
+                    label=label,
+                    state=state.clone(),
+                )
+            )
+            return checkpoint_id
+
+        def finish(
+            *,
+            status: str,
+            final_label: str = "final",
+            failure: EpisodeFailure | None = None,
+        ) -> EpisodeResult:
+            final_checkpoint_id = checkpoint(final_label)
+            outcome = self.scorer.score(
+                initial_state=self.world.state,
+                final_state=state,
+                action_log=state.action_log[score_start_action_index:],
+            )
+            return EpisodeResult(
+                episode_id=spec.episode_id,
+                world_id=self.world.world_id,
+                task_id=source.task_id,
+                status=status,
+                events=tuple(events),
+                checkpoints=tuple(checkpoints),
+                handoff_action_index=source.handoff_action_index,
+                handoff_checkpoint_id=source.handoff_checkpoint_id,
+                final_checkpoint_id=final_checkpoint_id,
+                final_state=state.clone(),
+                outcome=outcome,
+                failure=failure,
+                score_start_action_index=score_start_action_index,
+                resume_source_episode_id=source.episode_id,
+                resume_source_checkpoint_id=spec.checkpoint_id,
+            )
+
+        record(
+            "episode_resumed",
+            actor="runner",
+            message=(
+                f"resumed {source.episode_id} from checkpoint {spec.checkpoint_id}; "
+                f"score_from={spec.score_from}"
+            ),
+            checkpoint_id=spec.checkpoint_id,
+        )
+
+        last_result = _last_agent_tool_result(events)
+        status = "max_steps"
+        for step_index in range(spec.max_steps):
+            context = EpisodeContext(
+                episode_id=spec.episode_id,
+                world_id=self.world.world_id,
+                task_id=source.task_id,
+                workspace_brief=self.workspace_brief,
+                user_message=user_message,
+                events=tuple(events),
+                state=state.clone(),
+                last_result=last_result,
+            )
+            try:
+                agent_step = agent.next_step(context)
+            except Exception as exc:
+                failure = EpisodeFailure(
+                    stage="agent",
+                    reason=str(exc),
+                    exception_type=type(exc).__name__,
+                    event_sequence=len(events),
+                )
+                record(
+                    "episode_failed",
+                    actor="runner",
+                    message=f"{failure.stage}: {failure.reason}",
+                )
+                return finish(status="agent_failed", final_label="failed", failure=failure)
+            if not isinstance(agent_step, AgentStep):
+                failure = EpisodeFailure(
+                    stage="agent",
+                    reason="agent returned a non-AgentStep value",
+                    event_sequence=len(events),
+                )
+                record(
+                    "episode_failed",
+                    actor="runner",
+                    message=f"{failure.stage}: {failure.reason}",
+                )
+                return finish(status="agent_failed", final_label="failed", failure=failure)
+
+            if agent_step.call is None:
+                if agent_step.message:
+                    record(
+                        "agent_message",
+                        actor="agent",
+                        message=agent_step.message,
+                    )
+            else:
+                try:
+                    last_result = runtime.execute(
+                        agent_step.call,
+                        actor="agent",
+                        thought=agent_step.message,
+                    )
+                except Exception as exc:
+                    failure = EpisodeFailure(
+                        stage="runtime",
+                        reason=str(exc),
+                        exception_type=type(exc).__name__,
+                        event_sequence=len(events),
+                    )
+                    record(
+                        "episode_failed",
+                        actor="runner",
+                        message=f"{failure.stage}: {failure.reason}",
+                    )
+                    return finish(
+                        status="runtime_failed",
+                        final_label="failed",
+                        failure=failure,
+                    )
+                action_index = state.action_log[-1].index
+                record(
+                    "agent_tool_call",
+                    actor="agent",
+                    message=agent_step.message,
+                    call=agent_step.call,
+                    result=last_result,
+                    action_index=action_index,
+                )
+                checkpoint(f"after_agent_step_{step_index}")
+
+            if agent_step.call is None and agent_step.done:
+                status = "completed"
+                record("episode_completed", actor="agent")
+                break
+        else:
+            record(
+                "episode_stopped",
+                actor="runner",
+                message="maximum step count reached",
+            )
+
+        return finish(status=status)
+
+
+def _events_through(
+    events: tuple[EventRecord, ...],
+    sequence: int,
+) -> tuple[EventRecord, ...]:
+    return tuple(event for event in events if event.sequence <= sequence)
+
+
+def _checkpoints_through(
+    checkpoints: tuple[CheckpointRecord, ...],
+    sequence: int,
+) -> tuple[CheckpointRecord, ...]:
+    return tuple(checkpoint for checkpoint in checkpoints if checkpoint.sequence <= sequence)
+
+
+def _source_user_message(source: EpisodeResult) -> str:
+    for event in source.events:
+        if event.event_type == "episode_started":
+            return event.message
+    return ""
+
+
+def _last_agent_tool_result(events: list[EventRecord]) -> ToolResult | None:
+    for event in reversed(events):
+        if event.event_type == "agent_tool_call" and event.result is not None:
+            return event.result
+    return None

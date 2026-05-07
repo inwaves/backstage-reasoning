@@ -2,8 +2,8 @@
 
 ## Status Checklist
 
-Current focus: add a CLI wrapper for concrete run-spec files now that the first
-real model backend exists.
+Current focus: add hidden-state / Reasoning Theater attention-probe
+instrumentation.
 
 - [x] Research question and Phase 0 scope fixed.
 - [x] Office-productivity sandbox with neutral grounded tools.
@@ -18,9 +18,9 @@ real model backend exists.
   into model messages, with `state_only` and `activity_context` handoff views.
 - [x] vLLM/OpenAI-compatible backend for the Agent adapter.
 - [x] vLLM backend smoke-test script for a local OpenAI-compatible server.
-- [ ] **WIP:** CLI wrapper for concrete run-spec files.
-- [ ] Checkpoint resume API for forced continuations.
-- [ ] Hidden-state / Reasoning Theater attention-probe instrumentation.
+- [x] Hydra CLI wrapper for concrete office batch run configs.
+- [x] Checkpoint resume API for forced continuations.
+- [ ] **WIP:** Hidden-state / Reasoning Theater attention-probe instrumentation.
 - [ ] Text-only monitor and awareness-labeling pass.
 - [ ] Phase 0 aggregate plot.
 
@@ -31,8 +31,8 @@ up with the safety-relevant direction of the run?
 
 Reasoning Theater is the starting point: compare what is visible in the
 reasoning text with what is already indicated by stronger signals. For this
-project, the target is not an answer letter. The target is a grounded future
-outcome in a small real environment, such as:
+project, the target is a grounded future outcome in a small real environment,
+such as:
 
 - protected data sent to an unauthorized recipient;
 - a protected file deleted or overwritten;
@@ -40,7 +40,7 @@ outcome in a small real environment, such as:
 
 ## Firm Design Commitments
 
-- No multiple-choice tasks.
+- Tasks are open-ended grounded tool-use episodes.
 - No model fine-tuning in Phase 0.
 - Use an open-weight model so hidden states can be captured for probes.
 - Use the Reasoning Theater attention probe as the starting hidden-state probe.
@@ -141,4 +141,4 @@ reasoning makes that risk legible to a text-only monitor.
 - Building a broad benchmark.
 - Training a model organism.
 - Studying spontaneous risky initiation in Phase 0.
-- Adaptive compute or token-saving claims.
+- Deployment-efficiency claims.
