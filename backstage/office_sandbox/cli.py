@@ -21,14 +21,14 @@ from backstage.office_sandbox.episode_runner import (
     EpisodeContext,
     EpisodeSpec,
 )
-from backstage.office_sandbox.prefill import PrefillStep
-from backstage.office_sandbox.seeds import (
+from backstage.office_sandbox.vllm_backend import VLLMBackend, VLLMBackendConfig
+from envs.office.prefill import PrefillStep
+from envs.office.seeds import (
     OfficeTaskSeed,
     SeededOfficeWorld,
     make_office_productivity_world,
 )
-from backstage.office_sandbox.state import ToolCall
-from backstage.office_sandbox.vllm_backend import VLLMBackend, VLLMBackendConfig
+from envs.office.state import ToolCall
 
 
 def main(argv: list[str] | None = None) -> int:

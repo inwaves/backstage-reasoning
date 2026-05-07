@@ -13,7 +13,7 @@ from backstage.office_sandbox.agent import (
     ModelResponse,
     ToolSchema,
 )
-from backstage.office_sandbox.state import ToolCall
+from envs.office.state import ToolCall
 
 ToolMode = Literal["native", "json"]
 

@@ -11,9 +11,11 @@ from backstage.office_sandbox.episode_runner import (
     EpisodeContext,
     EventRecord,
 )
+from envs.core import ToolSchema  # noqa: TC001
+from envs.office.schemas import office_tool_schemas
 
 if TYPE_CHECKING:
-    from backstage.office_sandbox.state import ToolCall, ToolResult
+    from envs.office.state import ToolCall, ToolResult
 
 HandoffView = Literal["state_only", "activity_context"]
 
@@ -40,20 +42,6 @@ class ChatMessage:
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-shaped representation for persistence/debugging."""
-
-        return asdict(self)
-
-
-@dataclass(frozen=True)
-class ToolSchema:
-    """Provider-neutral tool schema exposed to the model backend."""
-
-    name: str
-    description: str
-    parameters: dict[str, object]
-
-    def to_dict(self) -> dict[str, object]:
-        """Return a JSON-shaped representation for provider adapters."""
 
         return asdict(self)
 
@@ -149,169 +137,6 @@ class Agent:
         if response.tool_call is not None:
             return AgentStep(message=response.message, call=response.tool_call)
         return AgentStep(message=response.message, done=True)
-
-
-def office_tool_schemas() -> tuple[ToolSchema, ...]:
-    """Return neutral office tool schemas visible to the agent."""
-
-    return (
-        ToolSchema(
-            name="list_files",
-            description="List workspace file paths, optionally under a prefix.",
-            parameters={
-                "type": "object",
-                "properties": {"prefix": {"type": "string"}},
-                "additionalProperties": False,
-            },
-        ),
-        ToolSchema(
-            name="search_files",
-            description="Search workspace files by path, title, summary, or content.",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string"},
-                    "prefix": {"type": "string"},
-                    "limit": {"type": "integer", "minimum": 0},
-                },
-                "additionalProperties": False,
-            },
-        ),
-        ToolSchema(
-            name="read_file",
-            description="Read one workspace file by path.",
-            parameters={
-                "type": "object",
-                "required": ["path"],
-                "properties": {"path": {"type": "string"}},
-                "additionalProperties": False,
-            },
-        ),
-        ToolSchema(
-            name="search_email",
-            description="Search inbox messages by query or sender.",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string"},
-                    "sender": {"type": "string"},
-                    "limit": {"type": "integer", "minimum": 0},
-                },
-                "additionalProperties": False,
-            },
-        ),
-        ToolSchema(
-            name="read_email",
-            description="Read one inbox email by id.",
-            parameters={
-                "type": "object",
-                "required": ["email_id"],
-                "properties": {"email_id": {"type": "string"}},
-                "additionalProperties": False,
-            },
-        ),
-        ToolSchema(
-            name="list_contacts",
-            description="Search or list workspace contacts.",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string"},
-                    "limit": {"type": "integer", "minimum": 0},
-                },
-                "additionalProperties": False,
-            },
-        ),
-        ToolSchema(
-            name="read_contact",
-            description="Read one contact by contact id or email address.",
-            parameters={
-                "type": "object",
-                "required": ["contact_id"],
-                "properties": {"contact_id": {"type": "string"}},
-                "additionalProperties": False,
-            },
-        ),
-        ToolSchema(
-            name="send_email",
-            description="Send an email from the workspace account.",
-            parameters={
-                "type": "object",
-                "required": ["to", "subject", "body"],
-                "properties": {
-                    "to": {
-                        "oneOf": [
-                            {"type": "string"},
-                            {"type": "array", "items": {"type": "string"}},
-                        ]
-                    },
-                    "subject": {"type": "string"},
-                    "body": {"type": "string"},
-                    "attachments": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                    },
-                },
-                "additionalProperties": False,
-            },
-        ),
-        ToolSchema(
-            name="write_file",
-            description="Create or overwrite a workspace file.",
-            parameters={
-                "type": "object",
-                "required": ["path", "content"],
-                "properties": {
-                    "path": {"type": "string"},
-                    "content": {"type": "string"},
-                },
-                "additionalProperties": False,
-            },
-        ),
-        ToolSchema(
-            name="delete_file",
-            description="Delete a workspace file by path.",
-            parameters={
-                "type": "object",
-                "required": ["path"],
-                "properties": {"path": {"type": "string"}},
-                "additionalProperties": False,
-            },
-        ),
-        ToolSchema(
-            name="list_calendar_events",
-            description="List calendar events by date range or query.",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "start": {"type": "string"},
-                    "end": {"type": "string"},
-                    "query": {"type": "string"},
-                    "limit": {"type": "integer", "minimum": 0},
-                },
-                "additionalProperties": False,
-            },
-        ),
-        ToolSchema(
-            name="create_calendar_event",
-            description="Create a calendar event with optional attendees and notes.",
-            parameters={
-                "type": "object",
-                "required": ["title", "start", "end"],
-                "properties": {
-                    "title": {"type": "string"},
-                    "start": {"type": "string"},
-                    "end": {"type": "string"},
-                    "attendees": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                    },
-                    "notes": {"type": "string"},
-                },
-                "additionalProperties": False,
-            },
-        ),
-    )
 
 
 def _system_prompt() -> str:

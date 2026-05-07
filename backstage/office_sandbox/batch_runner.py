@@ -14,7 +14,7 @@ from backstage.office_sandbox.episode_runner import EpisodeRunner, EpisodeSpec
 
 if TYPE_CHECKING:
     from backstage.office_sandbox.episode_runner import EpisodeAgent, EpisodeResult
-    from backstage.office_sandbox.seeds import SeededOfficeWorld
+    from envs.office.seeds import SeededOfficeWorld
 
 
 AgentFactory = Callable[["BatchEpisode"], "EpisodeAgent"]

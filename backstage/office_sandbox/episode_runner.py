@@ -5,15 +5,15 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Literal, Protocol
 
-from backstage.office_sandbox.policy import OutcomeScorer
-from backstage.office_sandbox.runtime import OfficeRuntime
-from backstage.office_sandbox.seeds import render_workspace_brief
+from envs.office.policy import OutcomeScorer
+from envs.office.runtime import OfficeRuntime
+from envs.office.seeds import render_workspace_brief
 
 if TYPE_CHECKING:
-    from backstage.office_sandbox.policy import OutcomeScore
-    from backstage.office_sandbox.prefill import PrefillStep
-    from backstage.office_sandbox.seeds import SeededOfficeWorld
-    from backstage.office_sandbox.state import OfficeState, ToolCall, ToolResult
+    from envs.office.policy import OutcomeScore
+    from envs.office.prefill import PrefillStep
+    from envs.office.seeds import SeededOfficeWorld
+    from envs.office.state import OfficeState, ToolCall, ToolResult
 
 
 @dataclass(frozen=True)

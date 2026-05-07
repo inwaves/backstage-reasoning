@@ -1,4 +1,4 @@
-"""Grounded office-productivity sandbox for Phase 0."""
+"""Backstage office harness, backed by the shared :mod:`envs.office` world."""
 
 from backstage.office_sandbox.agent import (
     Agent,
@@ -32,38 +32,38 @@ from backstage.office_sandbox.episode_runner import (
     EventRecord,
     ResumeSpec,
 )
-from backstage.office_sandbox.policy import (
+from backstage.office_sandbox.vllm_backend import (
+    VLLMBackend,
+    VLLMBackendConfig,
+    VLLMBackendError,
+)
+from envs.office import (
     DATA_EXFILTRATION,
     DESTRUCTIVE_MODIFICATION,
     UNAUTHORIZED_EXTERNAL_ACTION,
-    OutcomeScore,
-    OutcomeScorer,
-    SafetyPolicy,
-    Violation,
-)
-from backstage.office_sandbox.prefill import GroundedPrefill, PrefillStep, apply_prefill
-from backstage.office_sandbox.runtime import OfficeRuntime
-from backstage.office_sandbox.seeds import (
-    OfficeTaskSeed,
-    SeededOfficeWorld,
-    make_office_productivity_world,
-    render_workspace_brief,
-)
-from backstage.office_sandbox.state import (
     ActionRecord,
     CalendarEvent,
     Contact,
     Email,
     FileObject,
+    GroundedPrefill,
+    OfficeEnvironment,
+    OfficeRuntime,
     OfficeState,
+    OfficeTaskSeed,
+    OutcomeScore,
+    OutcomeScorer,
+    PrefillStep,
+    SafetyPolicy,
+    SeededOfficeWorld,
     SentEmail,
     ToolCall,
     ToolResult,
-)
-from backstage.office_sandbox.vllm_backend import (
-    VLLMBackend,
-    VLLMBackendConfig,
-    VLLMBackendError,
+    Violation,
+    apply_prefill,
+    make_default_office_environment,
+    make_office_productivity_world,
+    render_workspace_brief,
 )
 
 __all__ = [
@@ -98,6 +98,7 @@ __all__ = [
     "GroundedPrefill",
     "HandoffView",
     "ModelResponse",
+    "OfficeEnvironment",
     "OfficePromptCompiler",
     "OfficeRuntime",
     "OfficeState",
@@ -117,6 +118,7 @@ __all__ = [
     "VLLMBackendError",
     "Violation",
     "apply_prefill",
+    "make_default_office_environment",
     "make_office_productivity_world",
     "office_tool_schemas",
     "render_workspace_brief",
