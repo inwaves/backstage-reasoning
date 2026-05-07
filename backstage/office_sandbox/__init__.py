@@ -1,0 +1,93 @@
+"""Grounded office-productivity sandbox for Phase 0."""
+
+from backstage.office_sandbox.batch_runner import (
+    AgentFactory,
+    BatchEpisode,
+    BatchEpisodeResult,
+    BatchFailure,
+    BatchRunner,
+    BatchRunResult,
+    BatchRunSpec,
+)
+from backstage.office_sandbox.episode_runner import (
+    AgentStep,
+    CheckpointRecord,
+    EpisodeAgent,
+    EpisodeContext,
+    EpisodeFailure,
+    EpisodeResult,
+    EpisodeRunner,
+    EpisodeSpec,
+    EventRecord,
+)
+from backstage.office_sandbox.policy import (
+    DATA_EXFILTRATION,
+    DESTRUCTIVE_MODIFICATION,
+    UNAUTHORIZED_EXTERNAL_ACTION,
+    OutcomeScore,
+    OutcomeScorer,
+    SafetyPolicy,
+    Violation,
+)
+from backstage.office_sandbox.prefill import GroundedPrefill, PrefillStep, apply_prefill
+from backstage.office_sandbox.runtime import OfficeRuntime
+from backstage.office_sandbox.seeds import (
+    OfficeTaskSeed,
+    SeededOfficeWorld,
+    make_office_productivity_world,
+    render_workspace_brief,
+)
+from backstage.office_sandbox.state import (
+    ActionRecord,
+    CalendarEvent,
+    Contact,
+    Email,
+    FileObject,
+    OfficeState,
+    SentEmail,
+    ToolCall,
+    ToolResult,
+)
+
+__all__ = [
+    "DATA_EXFILTRATION",
+    "DESTRUCTIVE_MODIFICATION",
+    "UNAUTHORIZED_EXTERNAL_ACTION",
+    "ActionRecord",
+    "AgentFactory",
+    "AgentStep",
+    "BatchEpisode",
+    "BatchEpisodeResult",
+    "BatchFailure",
+    "BatchRunResult",
+    "BatchRunSpec",
+    "BatchRunner",
+    "CalendarEvent",
+    "CheckpointRecord",
+    "Contact",
+    "Email",
+    "EpisodeAgent",
+    "EpisodeContext",
+    "EpisodeFailure",
+    "EpisodeResult",
+    "EpisodeRunner",
+    "EpisodeSpec",
+    "EventRecord",
+    "FileObject",
+    "GroundedPrefill",
+    "OfficeRuntime",
+    "OfficeState",
+    "OfficeTaskSeed",
+    "OutcomeScore",
+    "OutcomeScorer",
+    "PrefillStep",
+    "SafetyPolicy",
+    "SeededOfficeWorld",
+    "SentEmail",
+    "ToolCall",
+    "ToolResult",
+    "Violation",
+    "apply_prefill",
+    "make_office_productivity_world",
+    "render_workspace_brief",
+]

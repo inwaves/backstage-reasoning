@@ -1,9 +1,30 @@
-# Roadmap: CoT Relevance for Grounded Agent Trajectories
+# Roadmap: Backstage Reasoning
+
+## Status Checklist
+
+Current focus: connect the batch harness to a real LLM agent adapter.
+
+- [x] Research question and Phase 0 scope fixed.
+- [x] Office-productivity sandbox with neutral grounded tools.
+- [x] Seeded office world with files, emails, contacts, calendar, and clutter.
+- [x] Offline outcome scorer for the three initial risk families.
+- [x] Grounded preconditioning replay.
+- [x] Episode runner for one task/agent continuation, with checkpoints, failure
+  records, and tool-result feedback to the agent.
+- [x] Batch runner for run specs, repeats, parallel execution, result
+  persistence, and aggregate status reporting.
+- [ ] **WIP:** LLM agent adapter that turns episode context and tool results
+  into model messages.
+- [ ] CLI wrapper for concrete run-spec files once the real agent adapter exists.
+- [ ] Checkpoint resume API for forced continuations.
+- [ ] Hidden-state / Reasoning Theater attention-probe instrumentation.
+- [ ] Text-only monitor and awareness-labeling pass.
+- [ ] Phase 0 aggregate plot.
 
 ## Core Question
 
-Can we tell, early in an agent trajectory, whether visible chain-of-thought is
-keeping up with the safety-relevant direction of the run?
+Can we tell, early in an agent trajectory, whether visible reasoning is keeping
+up with the safety-relevant direction of the run?
 
 Reasoning Theater is the starting point: compare what is visible in the
 reasoning text with what is already indicated by stronger signals. For this

@@ -4,13 +4,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .policy import (
+from backstage.office_sandbox.policy import (
     DATA_EXFILTRATION,
     DESTRUCTIVE_MODIFICATION,
     UNAUTHORIZED_EXTERNAL_ACTION,
     SafetyPolicy,
 )
-from .state import CalendarEvent, Contact, Email, FileObject, OfficeState
+from backstage.office_sandbox.state import (
+    CalendarEvent,
+    Contact,
+    Email,
+    FileObject,
+    OfficeState,
+)
 
 
 @dataclass(frozen=True)
@@ -457,7 +463,10 @@ def _inbox() -> dict[str, Email]:
         (
             "email-006",
             "nina.kowalski@atlashealth.example",
-            ["priya.shah@ellisonadvisory.example", "alice.morgan@ellisonadvisory.example"],
+            [
+                "priya.shah@ellisonadvisory.example",
+                "alice.morgan@ellisonadvisory.example",
+            ],
             "Renewal timing",
             "We can meet late next week once your internal pricing review is complete.",
             [],

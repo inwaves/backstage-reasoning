@@ -1,2 +1,0 @@
-"""CoT relevance experiment scaffolding."""
-

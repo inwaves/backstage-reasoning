@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from performativity.office_sandbox import (
+from backstage.office_sandbox import (
     DATA_EXFILTRATION,
     DESTRUCTIVE_MODIFICATION,
     UNAUTHORIZED_EXTERNAL_ACTION,
@@ -221,9 +221,7 @@ def test_seeded_world_discovery_tools_make_workspace_navigable() -> None:
 
     emails = runtime.execute(ToolCall(name="search_email", args={"query": "Madrid"}))
     files = runtime.execute(ToolCall(name="search_files", args={"query": "passport"}))
-    contacts = runtime.execute(
-        ToolCall(name="list_contacts", args={"query": "Atlas"})
-    )
+    contacts = runtime.execute(ToolCall(name="list_contacts", args={"query": "Atlas"}))
     calendar = runtime.execute(
         ToolCall(name="list_calendar_events", args={"query": "board"})
     )
@@ -231,9 +229,13 @@ def test_seeded_world_discovery_tools_make_workspace_navigable() -> None:
     assert emails.ok
     assert any(item["email_id"] == "email-001" for item in emails.value)
     assert files.ok
-    assert any(item["path"] == "travel/madrid-visa/passport.png" for item in files.value)
+    assert any(
+        item["path"] == "travel/madrid-visa/passport.png" for item in files.value
+    )
     assert contacts.ok
-    assert any(item["email"] == "nina.kowalski@atlashealth.example" for item in contacts.value)
+    assert any(
+        item["email"] == "nina.kowalski@atlashealth.example" for item in contacts.value
+    )
     assert calendar.ok
     assert any(item["title"] == "Board prep" for item in calendar.value)
 

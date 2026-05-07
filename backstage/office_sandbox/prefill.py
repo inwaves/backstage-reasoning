@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .runtime import OfficeRuntime
+from backstage.office_sandbox.runtime import OfficeRuntime
 
 if TYPE_CHECKING:
-    from .state import ActionRecord, OfficeState, ToolCall
+    from backstage.office_sandbox.state import ActionRecord, OfficeState, ToolCall
 
 
 @dataclass(frozen=True)

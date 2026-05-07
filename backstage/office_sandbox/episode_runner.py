@@ -1,0 +1,417 @@
+"""Episode orchestration for grounded office-productivity runs."""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+from typing import TYPE_CHECKING, Protocol
+
+from backstage.office_sandbox.policy import OutcomeScorer
+from backstage.office_sandbox.runtime import OfficeRuntime
+from backstage.office_sandbox.seeds import render_workspace_brief
+
+if TYPE_CHECKING:
+    from backstage.office_sandbox.policy import OutcomeScore
+    from backstage.office_sandbox.prefill import PrefillStep
+    from backstage.office_sandbox.seeds import SeededOfficeWorld
+    from backstage.office_sandbox.state import OfficeState, ToolCall, ToolResult
+
+
+@dataclass(frozen=True)
+class EpisodeSpec:
+    """Inputs that define one environment episode, independent of the agent."""
+
+    episode_id: str
+    task_id: str
+    user_message: str
+    preconditioning_steps: tuple[PrefillStep, ...] = field(default_factory=tuple)
+    max_steps: int = 12
+
+
+@dataclass(frozen=True)
+class AgentStep:
+    """One free agent step after handoff."""
+
+    message: str = ""
+    call: ToolCall | None = None
+    done: bool = False
+
+
+@dataclass(frozen=True)
+class EventRecord:
+    """A serializable event in the episode trace."""
+
+    sequence: int
+    event_type: str
+    actor: str
+    message: str = ""
+    call: ToolCall | None = None
+    result: ToolResult | None = None
+    action_index: int | None = None
+    checkpoint_id: str = ""
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-shaped representation for persistence."""
+
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CheckpointRecord:
+    """A named environment snapshot captured during an episode."""
+
+    checkpoint_id: str
+    sequence: int
+    label: str
+    state: OfficeState
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-shaped representation for persistence."""
+
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class EpisodeFailure:
+    """Harness-level failure details that should bubble up to batch reporting."""
+
+    stage: str
+    reason: str
+    exception_type: str = ""
+    event_sequence: int | None = None
+    action_index: int | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-shaped representation for persistence."""
+
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class EpisodeContext:
+    """Read-only context passed to the agent for the next free step."""
+
+    episode_id: str
+    world_id: str
+    task_id: str
+    workspace_brief: str
+    user_message: str
+    events: tuple[EventRecord, ...]
+    state: OfficeState
+    last_result: ToolResult | None = None
+
+
+class EpisodeAgent(Protocol):
+    """Minimal agent interface used by the office episode runner."""
+
+    def next_step(self, context: EpisodeContext) -> AgentStep:
+        """Return the next message/tool call from the current context."""
+
+
+@dataclass(frozen=True)
+class EpisodeResult:
+    """Completed episode trace, checkpoints, and scored continuation outcome."""
+
+    episode_id: str
+    world_id: str
+    task_id: str
+    status: str
+    events: tuple[EventRecord, ...]
+    checkpoints: tuple[CheckpointRecord, ...]
+    handoff_action_index: int
+    handoff_checkpoint_id: str
+    final_checkpoint_id: str
+    final_state: OfficeState
+    outcome: OutcomeScore
+    failure: EpisodeFailure | None = None
+
+    def checkpoint(self, checkpoint_id: str) -> CheckpointRecord:
+        """Look up a checkpoint by id."""
+
+        for checkpoint in self.checkpoints:
+            if checkpoint.checkpoint_id == checkpoint_id:
+                return checkpoint
+        raise KeyError(checkpoint_id)
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-shaped representation for persistence."""
+
+        return asdict(self)
+
+
+class EpisodeRunner:
+    """Run one grounded office episode from setup through scored continuation."""
+
+    def __init__(
+        self,
+        world: SeededOfficeWorld,
+        *,
+        scorer: OutcomeScorer | None = None,
+        workspace_brief: str | None = None,
+    ) -> None:
+        self.world = world
+        self.scorer = scorer or OutcomeScorer(world.policy)
+        self.workspace_brief = (
+            workspace_brief
+            if workspace_brief is not None
+            else render_workspace_brief(world)
+        )
+
+    def run(self, spec: EpisodeSpec, agent: EpisodeAgent) -> EpisodeResult:
+        """Apply setup, hand off to the agent, and score post-handoff actions."""
+
+        if spec.max_steps < 0:
+            raise ValueError("max_steps must be non-negative")
+
+        state = self.world.clone_state()
+        runtime = OfficeRuntime(state)
+        events: list[EventRecord] = []
+        checkpoints: list[CheckpointRecord] = []
+
+        def record(
+            event_type: str,
+            *,
+            actor: str,
+            message: str = "",
+            call: ToolCall | None = None,
+            result: ToolResult | None = None,
+            action_index: int | None = None,
+            checkpoint_id: str = "",
+        ) -> EventRecord:
+            event = EventRecord(
+                sequence=len(events),
+                event_type=event_type,
+                actor=actor,
+                message=message,
+                call=call,
+                result=result,
+                action_index=action_index,
+                checkpoint_id=checkpoint_id,
+            )
+            events.append(event)
+            return event
+
+        def checkpoint(label: str) -> str:
+            checkpoint_id = f"{spec.episode_id}:{label}:{len(checkpoints)}"
+            event = record(
+                "checkpoint_created",
+                actor="runner",
+                message=label,
+                checkpoint_id=checkpoint_id,
+            )
+            checkpoints.append(
+                CheckpointRecord(
+                    checkpoint_id=checkpoint_id,
+                    sequence=event.sequence,
+                    label=label,
+                    state=state.clone(),
+                )
+            )
+            return checkpoint_id
+
+        record("episode_started", actor="runner", message=spec.user_message)
+        checkpoint("initial")
+
+        def finish(
+            *,
+            status: str,
+            handoff_action_index: int,
+            handoff_checkpoint_id: str = "",
+            final_label: str = "final",
+            failure: EpisodeFailure | None = None,
+        ) -> EpisodeResult:
+            final_checkpoint_id = checkpoint(final_label)
+            post_handoff_log = (
+                state.action_log[handoff_action_index:] if handoff_checkpoint_id else []
+            )
+            outcome = self.scorer.score(
+                initial_state=self.world.state,
+                final_state=state,
+                action_log=post_handoff_log,
+            )
+            return EpisodeResult(
+                episode_id=spec.episode_id,
+                world_id=self.world.world_id,
+                task_id=spec.task_id,
+                status=status,
+                events=tuple(events),
+                checkpoints=tuple(checkpoints),
+                handoff_action_index=handoff_action_index,
+                handoff_checkpoint_id=handoff_checkpoint_id,
+                final_checkpoint_id=final_checkpoint_id,
+                final_state=state.clone(),
+                outcome=outcome,
+                failure=failure,
+            )
+
+        for step in spec.preconditioning_steps:
+            try:
+                result = runtime.execute(
+                    step.call,
+                    actor="preconditioning",
+                    thought=step.thought,
+                )
+            except Exception as exc:
+                failure = EpisodeFailure(
+                    stage="preconditioning",
+                    reason=str(exc),
+                    exception_type=type(exc).__name__,
+                    event_sequence=len(events),
+                )
+                record(
+                    "episode_failed",
+                    actor="runner",
+                    message=f"{failure.stage}: {failure.reason}",
+                )
+                return finish(
+                    status="setup_failed",
+                    handoff_action_index=len(state.action_log),
+                    final_label="failed",
+                    failure=failure,
+                )
+            action_index = state.action_log[-1].index
+            event = record(
+                "preconditioning_tool_call",
+                actor="preconditioning",
+                message=step.thought,
+                call=step.call,
+                result=result,
+                action_index=action_index,
+            )
+            if not result.ok:
+                failure = EpisodeFailure(
+                    stage="preconditioning",
+                    reason=(
+                        f"preconditioning action failed: {step.call.name}"
+                        f"({step.call.args}) -> {result.error}"
+                    ),
+                    event_sequence=event.sequence,
+                    action_index=action_index,
+                )
+                record(
+                    "episode_failed",
+                    actor="runner",
+                    message=f"{failure.stage}: {failure.reason}",
+                )
+                return finish(
+                    status="setup_failed",
+                    handoff_action_index=len(state.action_log),
+                    final_label="failed",
+                    failure=failure,
+                )
+
+        handoff_action_index = len(state.action_log)
+        handoff_checkpoint_id = checkpoint("handoff")
+
+        last_result: ToolResult | None = None
+        status = "max_steps"
+        for step_index in range(spec.max_steps):
+            context = EpisodeContext(
+                episode_id=spec.episode_id,
+                world_id=self.world.world_id,
+                task_id=spec.task_id,
+                workspace_brief=self.workspace_brief,
+                user_message=spec.user_message,
+                events=tuple(events),
+                state=state.clone(),
+                last_result=last_result,
+            )
+            try:
+                agent_step = agent.next_step(context)
+            except Exception as exc:
+                failure = EpisodeFailure(
+                    stage="agent",
+                    reason=str(exc),
+                    exception_type=type(exc).__name__,
+                    event_sequence=len(events),
+                )
+                record(
+                    "episode_failed",
+                    actor="runner",
+                    message=f"{failure.stage}: {failure.reason}",
+                )
+                return finish(
+                    status="agent_failed",
+                    handoff_action_index=handoff_action_index,
+                    handoff_checkpoint_id=handoff_checkpoint_id,
+                    final_label="failed",
+                    failure=failure,
+                )
+            if not isinstance(agent_step, AgentStep):
+                failure = EpisodeFailure(
+                    stage="agent",
+                    reason="agent returned a non-AgentStep value",
+                    event_sequence=len(events),
+                )
+                record(
+                    "episode_failed",
+                    actor="runner",
+                    message=f"{failure.stage}: {failure.reason}",
+                )
+                return finish(
+                    status="agent_failed",
+                    handoff_action_index=handoff_action_index,
+                    handoff_checkpoint_id=handoff_checkpoint_id,
+                    final_label="failed",
+                    failure=failure,
+                )
+
+            if agent_step.call is None:
+                if agent_step.message:
+                    record(
+                        "agent_message",
+                        actor="agent",
+                        message=agent_step.message,
+                    )
+            else:
+                try:
+                    last_result = runtime.execute(
+                        agent_step.call,
+                        actor="agent",
+                        thought=agent_step.message,
+                    )
+                except Exception as exc:
+                    failure = EpisodeFailure(
+                        stage="runtime",
+                        reason=str(exc),
+                        exception_type=type(exc).__name__,
+                        event_sequence=len(events),
+                    )
+                    record(
+                        "episode_failed",
+                        actor="runner",
+                        message=f"{failure.stage}: {failure.reason}",
+                    )
+                    return finish(
+                        status="runtime_failed",
+                        handoff_action_index=handoff_action_index,
+                        handoff_checkpoint_id=handoff_checkpoint_id,
+                        final_label="failed",
+                        failure=failure,
+                    )
+                action_index = state.action_log[-1].index
+                record(
+                    "agent_tool_call",
+                    actor="agent",
+                    message=agent_step.message,
+                    call=agent_step.call,
+                    result=last_result,
+                    action_index=action_index,
+                )
+                checkpoint(f"after_agent_step_{step_index}")
+
+            if agent_step.call is None and agent_step.done:
+                status = "completed"
+                record("episode_completed", actor="agent")
+                break
+        else:
+            record(
+                "episode_stopped",
+                actor="runner",
+                message="maximum step count reached",
+            )
+
+        return finish(
+            status=status,
+            handoff_action_index=handoff_action_index,
+            handoff_checkpoint_id=handoff_checkpoint_id,
+        )

@@ -1,91 +1,67 @@
-# CoT Relevance
+# Backstage Reasoning
 
 ![Reasoning Theater starting point](reasoning_theater.png)
 
-_Starting point: [Reasoning Theater](https://arxiv.org/abs/2603.05488) shows a gap between what is already decodable from model internals and what the visible chain of thought has revealed._
+_Starting point: [Reasoning Theater](https://arxiv.org/abs/2603.05488)
+shows a gap between what is already decodable from model internals and what the
+visible reasoning trace has revealed._
 
-This repo is an experiment scaffold for building a **chain-of-thought relevance audit tool**.
+Backstage Reasoning studies whether hidden-state and action-continuation
+signals can reveal where an agent trajectory is going before the visible
+reasoning makes that direction legible.
 
 The core question is:
 
-> Given a model and a task, can we predict before or very early during generation whether the model's chain of thought will be useful serial computation or mostly performative narration?
+> In a grounded agent environment, can we tell early whether visible reasoning is
+> keeping up with the safety-relevant direction of the run?
 
 ## Motivation
 
-Reasoning Theater gives us the key observation. On easier MMLU-style questions, activation probes and forced answering can often recover the model's eventual answer far earlier than a CoT monitor can infer it from the visible reasoning. On harder GPQA-Diamond-style questions, the internal signal and visible reasoning tend to improve together.
+Reasoning Theater gives us the methodological starting point: compare the
+visible trace with stronger signals such as activation probes and forced
+continuations. This project moves that idea from answer letters toward grounded
+agent trajectories.
 
-So the practical problem is not just "is CoT faithful?" It is:
+Instead of asking whether a model has internally chosen option A, we ask whether
+an agent is drifting toward a concrete outcome in a small real environment:
 
-> When should we treat a reasoning trace as decision-relevant evidence, and when should we flag it as likely post-hoc or low-value?
+- protected data sent to an unauthorized recipient;
+- a protected file deleted or overwritten;
+- an external action taken without approval.
 
-If we can predict that regime early, we can use it for two things:
+The transcript is the stage. Hidden states, action tendencies, forced rollouts,
+and environment checkpoints are the backstage. The safety question is whether
+the backstage direction becomes clear before visible reasoning admits it.
 
-1. **Audit routing:** warn that a CoT trace is likely performative and should not be trusted as the main monitoring surface.
-2. **Adaptive compute:** stop or shorten reasoning when the model is already internally committed, while preserving full reasoning for cases where it is genuinely useful.
+## Current Build
 
-## Project Shape
+Phase 0 builds a small office-productivity sandbox and evaluation harness:
 
-The project uses RT-style probes and forced-answering curves as **offline labeling machinery**. We run full traces, identify whether reasoning was performative or computation-bearing, and then train cheaper predictors that can fire before or near the start of generation.
+- a seeded workspace with files, emails, contacts, calendar events, and routine
+  clutter;
+- neutral grounded tools such as `read_email`, `read_file`, `send_email`,
+  `write_file`, `delete_file`, and `create_calendar_event`;
+- grounded preconditioning before handoff;
+- an episode runner with checkpoints and tool-result feedback;
+- a batch runner with repeats, parallel execution, result persistence, and
+  status reporting;
+- an offline outcome scorer for the initial risk families.
 
-### Offline labels
+The active implementation plan is tracked in [docs/roadmap.md](docs/roadmap.md).
 
-For each trace, compute:
+## Package
 
-- probe accuracy/confidence over normalized reasoning prefixes;
-- forced-answer accuracy/confidence over prefixes;
-- CoT-monitor accuracy over visible reasoning prefixes;
-- final-answer correctness and answer stability.
+The Python package is `backstage`:
 
-Label examples as:
-
-- **Performative:** early probe/forced-answer confidence is high, later CoT adds little, and the text lags the internal commitment.
-- **Genuine:** early confidence is low or unstable, and later reasoning materially changes answer confidence or correctness.
-- **Ambiguous:** noisy, conflicting, or underpowered cases.
-
-### Deployment-time predictors
-
-Train predictors using signals available before or shortly after reasoning begins:
-
-- prompt-end activation probe confidence;
-- answer-choice logit margins;
-- first-k-token activation dynamics;
-- short forced-answer confidence;
-- entropy and confidence change over the first few reasoning steps;
-- task metadata or self-rated difficulty as baselines.
-
-The target artifact is a small audit module that emits a warning like:
-
-> This trace is likely performative: the model appears internally committed before the visible reasoning reveals the answer.
-
-or:
-
-> This trace appears computation-bearing: internal answer belief is still evolving, so CoT monitoring is more likely to be informative.
-
-## Roadmap
-
-The working plan is in [docs/roadmap.md](docs/roadmap.md).
-
-Short version:
-
-1. Reproduce the minimal RT-style measurement loop on a small MCQ setup.
-2. Build a trace-level labeler for performative vs genuine reasoning.
-3. Train early predictors from prompt-end and first-k-token features.
-4. Evaluate as an audit router and adaptive-compute controller.
-5. Package results into a small report plus reusable code.
+```python
+from backstage.office_sandbox import BatchRunner, EpisodeRunner
+```
 
 ## Docs
 
-The center of gravity is the CoT relevance predictor. The older experiment
-ideas are archived as context rather than active build specs:
-
-- [docs/roadmap.md](docs/roadmap.md) - active research and implementation roadmap.
-- [docs/cot-faithfulness-background.md](docs/cot-faithfulness-background.md) - prior-work evidence catalog.
-- [docs/historical/README.md](docs/historical/README.md) - archived earlier directions and why they were set aside.
-- [docs/historical/rl-pair-performativity.md](docs/historical/rl-pair-performativity.md) - earlier matched-capability post-training idea.
-- [docs/historical/multi-step-performativity.md](docs/historical/multi-step-performativity.md) - earlier action-grounded follow-up idea.
-- [docs/historical/design-doc.md](docs/historical/design-doc.md) - earlier shared infrastructure plan.
-
-The current project does not depend on proving an inverted-U shape or on cleanly isolating RL post-training as a causal variable. It focuses on the more operational question: **can we detect the CoT relevance regime early enough to be useful?**
+- [docs/roadmap.md](docs/roadmap.md) - active project dashboard and roadmap.
+- [docs/cot-faithfulness-background.md](docs/cot-faithfulness-background.md) -
+  prior-work evidence catalog.
 
 ## Setup
 
