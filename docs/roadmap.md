@@ -17,6 +17,7 @@ real model backend exists.
 - [x] Provider-neutral Agent adapter that turns episode context and tool results
   into model messages, with `state_only` and `activity_context` handoff views.
 - [x] vLLM/OpenAI-compatible backend for the Agent adapter.
+- [x] vLLM backend smoke-test script for a local OpenAI-compatible server.
 - [ ] **WIP:** CLI wrapper for concrete run-spec files.
 - [ ] Checkpoint resume API for forced continuations.
 - [ ] Hidden-state / Reasoning Theater attention-probe instrumentation.

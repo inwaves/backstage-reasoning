@@ -143,8 +143,12 @@ def test_vllm_backend_json_tool_mode_uses_prompt_protocol() -> None:
     request = client.completions.calls[0]
 
     assert "tools" not in request
-    assert "Tool call protocol" in request["messages"][-1]["content"]
-    assert "read_file" in request["messages"][-1]["content"]
+    assert "Tool call protocol" in request["messages"][0]["content"]
+    assert "read_file" in request["messages"][0]["content"]
+    assert request["messages"][1] == {
+        "role": "user",
+        "content": "Please inspect notes.",
+    }
     assert result.message == "Looking it up."
     assert result.tool_call is not None
     assert result.tool_call.name == "read_file"
@@ -163,6 +167,24 @@ def test_vllm_backend_plain_text_response_finishes_without_tool_call() -> None:
 
     assert result.message == "Done."
     assert result.tool_call is None
+
+
+def test_vllm_backend_json_mode_does_not_add_tool_protocol_without_tools() -> None:
+    client = FakeClient({"choices": [{"message": {"content": "Hello."}}]})
+    backend = VLLMBackend(
+        backend_config=VLLMBackendConfig(tool_mode="json"),
+        client=client,
+    )
+
+    result = backend.complete(
+        messages=(ChatMessage(role="user", content="Say hello."),),
+        tools=(),
+        config=AgentConfig(model="test-model"),
+    )
+    request = client.completions.calls[0]
+
+    assert result.message == "Hello."
+    assert request["messages"] == [{"role": "user", "content": "Say hello."}]
 
 
 def test_vllm_backend_returns_explicit_unknown_json_tool_to_runtime() -> None:

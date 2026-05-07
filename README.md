@@ -77,3 +77,65 @@ uv run ruff check .
 uv run ruff format .
 uv run pytest
 ```
+
+## vLLM Smoke Test
+
+For a local-machine smoke without vLLM, start a tiny OpenAI-compatible server
+backed by Hugging Face `transformers`:
+
+```bash
+UV_CACHE_DIR=/private/tmp/backstage-uv-cache \
+HF_HOME=/private/tmp/backstage-hf-cache \
+uv run python scripts/local_hf_openai_server.py \
+  --model HuggingFaceTB/SmolLM2-135M-Instruct \
+  --device cpu \
+  --port 8018
+```
+
+Then, from another shell:
+
+```bash
+UV_CACHE_DIR=/private/tmp/backstage-uv-cache \
+uv run python scripts/smoke_vllm_backend.py \
+  --base-url http://127.0.0.1:8018/v1 \
+  --model HuggingFaceTB/SmolLM2-135M-Instruct
+```
+
+For a lightweight JSON tool-call smoke:
+
+```bash
+UV_CACHE_DIR=/private/tmp/backstage-uv-cache \
+uv run python scripts/smoke_vllm_backend.py \
+  --base-url http://127.0.0.1:8018/v1 \
+  --model HuggingFaceTB/SmolLM2-135M-Instruct \
+  --tool-smoke \
+  --tool-mode json \
+  --max-tokens 256
+```
+
+On a machine with vLLM installed, start a small Hugging Face model behind the
+OpenAI-compatible server:
+
+```bash
+vllm serve HuggingFaceTB/SmolLM2-135M-Instruct \
+  --host 127.0.0.1 \
+  --port 8000 \
+  --dtype auto \
+  --max-model-len 2048
+```
+
+Then, from this repo:
+
+```bash
+uv run python scripts/smoke_vllm_backend.py \
+  --model HuggingFaceTB/SmolLM2-135M-Instruct
+```
+
+For a lightweight tool-call smoke, use JSON tool mode:
+
+```bash
+uv run python scripts/smoke_vllm_backend.py \
+  --model HuggingFaceTB/SmolLM2-135M-Instruct \
+  --tool-smoke \
+  --tool-mode json
+```

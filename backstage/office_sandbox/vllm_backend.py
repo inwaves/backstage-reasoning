@@ -60,8 +60,8 @@ class VLLMBackend:
         request_tools: list[dict[str, object]] = []
         if self.backend_config.tool_mode == "native":
             request_tools = [_to_openai_tool(tool) for tool in tools]
-        else:
-            request_messages.append(_json_tool_protocol_message(tools))
+        elif tools:
+            _insert_json_tool_protocol(request_messages, tools)
 
         request: dict[str, object] = {
             "model": config.model,
@@ -131,6 +131,17 @@ def _to_openai_tool(tool: ToolSchema) -> dict[str, object]:
     }
 
 
+def _insert_json_tool_protocol(
+    messages: list[dict[str, object]],
+    tools: tuple[ToolSchema, ...],
+) -> None:
+    protocol = _json_tool_protocol_message(tools)
+    insert_at = 0
+    while insert_at < len(messages) and messages[insert_at].get("role") == "system":
+        insert_at += 1
+    messages.insert(insert_at, protocol)
+
+
 def _json_tool_protocol_message(tools: tuple[ToolSchema, ...]) -> dict[str, object]:
     tool_lines = []
     for tool in tools:
@@ -144,7 +155,9 @@ def _json_tool_protocol_message(tools: tuple[ToolSchema, ...]) -> dict[str, obje
             "Tool call protocol: when you need to use a tool, respond with only "
             "one JSON object of the form "
             '{"message":"short note","tool_call":{"name":"tool_name","args":{}}}. '
-            "When no tool is needed, respond normally.\n\n"
+            "The args object must contain concrete argument values for this call; "
+            "do not copy the parameter schema into args. When no tool is needed, "
+            "respond normally.\n\n"
             "Available tools:\n"
             + "\n".join(tool_lines)
         ),
