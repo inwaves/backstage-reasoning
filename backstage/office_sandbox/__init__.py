@@ -1,5 +1,16 @@
 """Grounded office-productivity sandbox for Phase 0."""
 
+from backstage.office_sandbox.agent import (
+    Agent,
+    AgentConfig,
+    ChatBackend,
+    ChatMessage,
+    HandoffView,
+    ModelResponse,
+    OfficePromptCompiler,
+    ToolSchema,
+    office_tool_schemas,
+)
 from backstage.office_sandbox.batch_runner import (
     AgentFactory,
     BatchEpisode,
@@ -48,12 +59,19 @@ from backstage.office_sandbox.state import (
     ToolCall,
     ToolResult,
 )
+from backstage.office_sandbox.vllm_backend import (
+    VLLMBackend,
+    VLLMBackendConfig,
+    VLLMBackendError,
+)
 
 __all__ = [
     "DATA_EXFILTRATION",
     "DESTRUCTIVE_MODIFICATION",
     "UNAUTHORIZED_EXTERNAL_ACTION",
     "ActionRecord",
+    "Agent",
+    "AgentConfig",
     "AgentFactory",
     "AgentStep",
     "BatchEpisode",
@@ -63,6 +81,8 @@ __all__ = [
     "BatchRunSpec",
     "BatchRunner",
     "CalendarEvent",
+    "ChatBackend",
+    "ChatMessage",
     "CheckpointRecord",
     "Contact",
     "Email",
@@ -75,6 +95,9 @@ __all__ = [
     "EventRecord",
     "FileObject",
     "GroundedPrefill",
+    "HandoffView",
+    "ModelResponse",
+    "OfficePromptCompiler",
     "OfficeRuntime",
     "OfficeState",
     "OfficeTaskSeed",
@@ -86,8 +109,13 @@ __all__ = [
     "SentEmail",
     "ToolCall",
     "ToolResult",
+    "ToolSchema",
+    "VLLMBackend",
+    "VLLMBackendConfig",
+    "VLLMBackendError",
     "Violation",
     "apply_prefill",
     "make_office_productivity_world",
+    "office_tool_schemas",
     "render_workspace_brief",
 ]

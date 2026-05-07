@@ -2,7 +2,8 @@
 
 ## Status Checklist
 
-Current focus: connect the batch harness to a real LLM agent adapter.
+Current focus: add a CLI wrapper for concrete run-spec files now that the first
+real model backend exists.
 
 - [x] Research question and Phase 0 scope fixed.
 - [x] Office-productivity sandbox with neutral grounded tools.
@@ -13,9 +14,10 @@ Current focus: connect the batch harness to a real LLM agent adapter.
   records, and tool-result feedback to the agent.
 - [x] Batch runner for run specs, repeats, parallel execution, result
   persistence, and aggregate status reporting.
-- [ ] **WIP:** LLM agent adapter that turns episode context and tool results
-  into model messages.
-- [ ] CLI wrapper for concrete run-spec files once the real agent adapter exists.
+- [x] Provider-neutral Agent adapter that turns episode context and tool results
+  into model messages, with `state_only` and `activity_context` handoff views.
+- [x] vLLM/OpenAI-compatible backend for the Agent adapter.
+- [ ] **WIP:** CLI wrapper for concrete run-spec files.
 - [ ] Checkpoint resume API for forced continuations.
 - [ ] Hidden-state / Reasoning Theater attention-probe instrumentation.
 - [ ] Text-only monitor and awareness-labeling pass.
